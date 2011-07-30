@@ -30,7 +30,8 @@ def parse_ign_game(id, id2, link):
 			img_thumb = thumb.find('img')
             try:
                 thumbnail = img_thumb['src']
-            except: thumbnail = None
+            except KeyError: 
+                thumbnail = None
 		else:
 			thumbnail = None
 			
@@ -134,9 +135,13 @@ def parse_ign_game(id, id2, link):
 	
 	try:
 		cursor.execute("INSERT INTO game_info " \
-			"(id,thumbnail,summary,genre,publisher,developer,release_date_text,msrp,also_on,ign_score,press_score,press_count,reader_score,reader_count,release_date,esrb_rating,esrb_reason) " \
+			"(id,thumbnail,summary,genre,publisher,developer,release_date_text," \
+            "msrp,also_on,ign_score,press_score,press_count,reader_score,reader_count," \
+            "release_date,esrb_rating,esrb_reason) " \
 			"VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", \
-			[id,thumbnail,summary,genre,publisher,developer,release_date_text,msrp,also_on,ign_score,press_score,press_count,reader_score,reader_count,release_date,esrb_rating,esrb_reason])
+			[id,thumbnail,summary,genre,publisher,developer,release_date_text, \
+            msrp,also_on,ign_score,press_score,press_count,reader_score,reader_count, \
+            release_date,esrb_rating,esrb_reason])
 	except:
 		return
 
@@ -215,35 +220,3 @@ def get_ign_summary_url(id2):
 			
 parse_ign_all()
 cursor.close()
-
-
-
-
-			# d1str = details1.text.replace('Genre:', '~Genre:') \
-				# .replace('Publisher:', '~Publisher:') \
-				# .replace('Developer:', '~Developer:')
-			##Genre:StrategyPublisher:MicrosoftDeveloper:TBA
-			# match1 = re.search('(~Genre:(?P<genre>[^~]+))*(~Publisher:(?P<publisher>[^~]+))*(~Developer:(?P<developer>[^~]+))*', d1str)
-			# if match1:
-				# genre = match1.group('genre')
-				# publisher = match1.group('publisher')
-				# developer = match1.group('developer')
-				# print "%s | %s | %s" % ( genre, publisher, developer )
-			# else:
-				# no_details1()
-				
-				
-				
-			# d2str = details2.text.replace('Cancelled', '~Release Date:Cancelled') \
-				# .replace('Release Date:', '~Release Date:') \
-				# .replace('Exclusively on:', '~Also on:N/A') \
-				# .replace('Also on:', '~Also on:')
-			##Release Date:TBAExclusively on:Xbox 360
-			# match2 = re.search('(~Release Date:(?P<rdate>[^~]+))*(~Also on:(?P<also_on>[^~]+))*', d2str)
-			# if match2:
-				# release_date_text = match2.group('rdate')
-				# also_on = match2.group('also_on')
-				# print "%s | %s" % ( release_date_text, also_on )
-			# else:
-				# no_details2()
-	
