@@ -9,8 +9,8 @@ import re
 import shutil
 
 
-conn = sqlite3.connect('ign.s3db')
-cursor = conn.cursor()
+DATABASE_FILENAME = 'ign.s3db'
+DATABASE_SCHEMA_FILENAME = 'ign.schema.s3db'
 letters = 'abcdefghijklmnopqrstuvwxyz'
 systems = [ 'x360', 'ps3', 'wii', 'pc', 'psp', 'ds' ]
 dt1 = [ 'Genre:', 'Publisher:', 'Developer:' ]
@@ -155,6 +155,8 @@ def parse_ign_game(id, id2, link):
                 reader_count = reader_count_item.text.strip().replace(' ratings', '')
                 if not is_number(reader_count): reader_count = None
     
+    conn = sqlite3.connect(DATABASE_FILENAME)
+    cursor = conn.cursor()
     try:
         cursor.execute("INSERT INTO game_info " \
             "(id,thumbnail,summary,genre,publisher,developer,release_date_text," \
@@ -165,7 +167,8 @@ def parse_ign_game(id, id2, link):
             msrp,also_on,ign_score,press_score,press_count,reader_score,reader_count, \
             release_date,esrb_rating,esrb_reason])
     except:
-        return
+        print "Error inserting game_info row into database"
+    cursor.close()
 
 def is_number(s):
     try:
@@ -186,6 +189,8 @@ def parse_ign_system(system):
         parse_ign_page(system, i)
 
 def parse_ign_page(system, letterNum):
+    conn = sqlite3.connect(DATABASE_FILENAME)
+    cursor = conn.cursor()
     url = get_ign_url(system, letterNum)
     print url
     try:
@@ -231,6 +236,7 @@ def parse_ign_page(system, letterNum):
         parse_ign_game(id, id2, link)    
         
         conn.commit()
+        cusror.close()
         
 def get_ign_url(system, letterNum):
     letter = 'other' if letterNum >= len(letters) else letters[letterNum]
@@ -244,13 +250,15 @@ def get_ign_search_url(search):
     return "http://search-api.ign.com/solr/ign.media.object/select/?wt=xml&json.wrf=jsonp1312052095285&_=1312052109888&q=%s&limit=10&timestamp=1312052109888&rows=5&df=title&qt=timelinehandler" % search.replace(' ', '%20')
 
 def copy_blank_db():
-    shutil.copy("ign.schema.s3db", "ign.s3db")
-
+    try:
+        shutil.copy(DATABASE_SCHEMA_FILENAME, DATABASE_FILENAME)
+    except IOError:
+        print "Error copying %s" % DATABASE_SCHEMA_FILENAME
+        
 def main():
     #parse_ign_all()
     copy_blank_db()
     search_ign('catherine')
-    cursor.close()
 
 if __name__ == "__main__":
     main()
