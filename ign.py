@@ -6,6 +6,7 @@ import sqlite3
 import urllib2
 import sys
 import re
+import shutil
 
 
 conn = sqlite3.connect('ign.s3db')
@@ -241,7 +242,15 @@ def get_ign_summary_url(id2):
 
 def get_ign_search_url(search):
     return "http://search-api.ign.com/solr/ign.media.object/select/?wt=xml&json.wrf=jsonp1312052095285&_=1312052109888&q=%s&limit=10&timestamp=1312052109888&rows=5&df=title&qt=timelinehandler" % search.replace(' ', '%20')
-    
-#parse_ign_all()
-search_ign('catherine')
-cursor.close()
+
+def copy_blank_db():
+    shutil.copy("ign.schema.s3db", "ign.s3db")
+
+def main():
+    #parse_ign_all()
+    copy_blank_db()
+    search_ign('catherine')
+    cursor.close()
+
+if __name__ == "__main__":
+    main()
