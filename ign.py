@@ -33,7 +33,7 @@ class Game:
         return [ self.id, self.id1, self.id2, self.name, self.link, self.rating, self.system, self.last_updated ]
 
     def __repr__(self):
-        return "%s | %s | %s | %s | %s | %s | %s" % (self.system, self.rating, self.update, self.name, self.id1, self.id2, self.id)
+        return "%s | %s | %s | %s | %s | %s | %s" % (self.system, self.rating, self.last_updated, self.name, self.id1, self.id2, self.id)
         
 class GameInfo:
     def __init__(self):
@@ -64,37 +64,51 @@ class GameInfo:
                 "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
     
     def get_insert_values(self):
-        [ self.id, self.thumbnail, self.summary, self.genre, self.publisher, self.developer, self.release_date_text, \
-            self.msrp, self.also_on, self.ign_score, self.press_score, self.press_count, self.reader_score, self.reader_count, \
-            self.release_date, self.esrb_rating, self.esrb_reason ]
+        return [ self.id, self.thumbnail, self.summary, self.genre, self.publisher, self.developer, self.release_date_text, self.msrp, self.also_on, self.ign_score, self.press_score, self.press_count, self.reader_score, self.reader_count, self.release_date, self.esrb_rating, self.esrb_reason ]
+
+class SearchResult:
+    def __init__(self):
+        self.title = None
+        self.system = None
+        self.score = None
+        self.boxart = None
+        self.description = None
+        self.link = None      
+        
+    def __repr__(self):
+        return "%s | %s | %s | %s | %s" % ( self.title, self.system, self.score, self.boxart, self.link )
         
 def get_ign_value(doc, name):
     try:
         return doc.find(attrs = { "name" : name }).text.strip()
     except: return None
-    
+ 
 def search_ign(search):
     url = get_ign_search_url(search)
     try:
         xml = urllib2.urlopen(url).read()
-    except: return
+    except: return None
     soup = BeautifulSoup(xml)
     docs = soup.findAll('doc')
+    results = []
     for doc in docs:
-        title = get_ign_value(doc, "title")
-        system = get_ign_value(doc, "platformName")
-        score = get_ign_value(doc, "objectScoreNumeric")
-        boxart = get_ign_value(doc, "boxArt")
-        description = get_ign_value(doc, "description")
-        link = get_ign_value(doc, "url")
-        print "%s | %s | %s | %s | %s" % ( title, system, score, boxart, link )
+        result = SearchResult()
+        result.title = get_ign_value(doc, "title")
+        result.system = get_ign_value(doc, "platformName")
+        result.score = get_ign_value(doc, "objectScoreNumeric")
+        result.boxart = get_ign_value(doc, "boxArt")
+        result.description = get_ign_value(doc, "description")
+        result.link = get_ign_value(doc, "url")
+        results.append(result)
+    return results
 
 def parse_ign_game_info(game):
     info = GameInfo()
+    info.id = game.id
     url = game.link #get_ign_summary_url(id2)
     try:
         html = urllib2.urlopen(url).read()
-    except: return    
+    except: return None  
     soup = BeautifulSoup(html)
     about = soup.find(id='about-tabs-data')
     if about is not None:
@@ -124,10 +138,10 @@ def parse_ign_game_info(game):
     score_items = soup.findAll(attrs = { "class" : "score-item" })
     parse_score_items(score_items, info)
     
+    print info.get_insert_values()
     return info
 
-def parse_details1(details1, game_info):
-    info = game_info
+def parse_details1(details1, info):
     dt1 = [ 'Genre:', 'Publisher:', 'Developer:' ]
     active_dt1 = None
     if details1 is not None:
@@ -145,8 +159,7 @@ def parse_details1(details1, game_info):
                     active_dt1 = None    
     print "details1: \"%s\" | \"%s\" | \"%s\"" % ( info.genre, info.publisher, info.developer )    
 
-def parse_details2(details2, game_info):
-    info = game_info
+def parse_details2(details2, info):
     dt2 = [ 'Release Date:', 'Cancelled', 'Also on:', 'Exclusively on:', 'MSRP:', 'ESRB:' ]
     active_dt2 = None
     if details2 is not None:
@@ -178,8 +191,7 @@ def parse_details2(details2, game_info):
                     active_dt2 = None    
     print "details2: \"%s\" | \"%s\" | \"%s\"" % ( info.release_date_text, info.also_on, info.msrp )    
     
-def parse_score_items(score_items, game_info):
-    info = game_info
+def parse_score_items(score_items, info):
     if score_items is not None and len(score_items) == 2:
         press_item = score_items[0]
         if press_item is not None:
@@ -229,7 +241,9 @@ def parse_ign_page(system, letterNum):
         return
     soup = BeautifulSoup(html)
     gs = soup.findAll(attrs = { "class" : "no-pad-btm" })
+    games = []
     for g in gs:
+        game = Game()
         listings = g.findAll(attrs = { "class" : "listings first" })
         name_node = listings[0]
         a_name = name_node.find('a')
@@ -238,33 +252,33 @@ def parse_ign_page(system, letterNum):
         update_node = listings[2]
         h3_update = update_node.find('h3')
         
-        name = a_name.text
-        link = a_name['href']
-        tokens = link.split('/')
-        id1 = tokens[4]
-        id2 = tokens[5].replace('.html', '')
-        id = id1 + id2
-        rating = h3_rating.text
-        if rating == 'NR':
-            rating = None
+        game.name = a_name.text
+        game.link = a_name['href']
+        tokens = game.link.split('/')
+        game.id1 = tokens[4]
+        game.id2 = tokens[5].replace('.html', '')
+        game.id = game.id1 + game.id2
+        game.rating = h3_rating.text
+        if game.rating == 'NR':
+            game.rating = None
         update = h3_update.text
         if update == '':
-            last_updated = None
+            game.last_updated = None
         else:
-            last_updated = datetime.strptime(update, '%b %d, %Y')
+            game.last_updated = datetime.strptime(update, '%b %d, %Y')
         
-        print "%s | %s | %s | %s | %s | %s | %s" % (system, rating, update, name, id1, id2, id)
+        games.append(game)
+        print game
         
         conn = sqlite3.connect(DATABASE_FILENAME)
         cursor = conn.cursor()
         try:
-            cursor.execute("INSERT INTO game " \
-                "(id,id1,id2,name,link,rating,system,last_updated) "\
-                "VALUES (?,?,?,?,?,?,?,?)", \
-                [ id, id1, id2, name, link, rating, system, last_updated ])
+            cursor.execute(Game.get_insert_string(), game.get_insert_values())
         except:
             print "Error inserting game row into database"
-            return
+            conn.commit()
+            cursor.close()
+            return None
         conn.commit()
         cursor.close()
         
@@ -273,11 +287,11 @@ def parse_ign_page(system, letterNum):
         conn2 = sqlite3.connect(DATABASE_FILENAME)
         cursor2 = conn2.cursor()
         try:
-            cursor2.execute(GameInfo.get_insert_string(), info.get_insert_values())
+            cursor2.execute(GameInfo.get_insert_string(), game_info.get_insert_values())
         except:
             print "Error inserting game_info row into database"
         conn2.commit()
-        cursor2.close()        
+        cursor2.close()
         
 def get_ign_url(system, letterNum):
     letter = 'other' if letterNum >= len(letters) else letters[letterNum]
@@ -297,9 +311,13 @@ def copy_blank_db():
         print "Error copying %s" % DATABASE_SCHEMA_FILENAME
         
 def main():
+    print "MAIN"
     copy_blank_db()
-    parse_ign_all()
-    #search_ign('catherine')
+    #parse_ign_all()
+    parse_ign_page('x360', 0)
+    #results = search_ign('catherine')
+    #for result in results:
+    #    print str(result) + "\n"
 
 if __name__ == "__main__":
     main()
