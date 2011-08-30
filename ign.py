@@ -154,16 +154,21 @@ class IGN:
                     info.thumbnail = img_thumb['src']
                 except KeyError: 
                     info.thumbnail = None
-                
-            summary_node = about.find(attrs = { "class" : "column-about-boxart" })
-            if summary_node is not None:
-                info.summary = summary_node.text
             
             details1 = about.find(attrs = { "class" : "column-about-details" })
             parse_details1(details1, info)
 
             details2 = about.find(attrs = { "class" : "column-about-details-2" })
             parse_details2(details2, info)
+            
+            summary_node = about.find(attrs = { "class" : "column-about-boxart" })
+            if summary_node is not None:
+                summary = summary_node.text
+                if details1 is not None:
+                    summary = summary[:summary.find(details1.text)]
+                elif details2 is not None:
+                    summary = summary[:summary.find(details1.text)]
+                info.summary = summary.strip()             
         
         ign_score_node = soup.find(attrs = { "class" : "value integer" })
         if ign_score_node is not None:
