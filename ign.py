@@ -133,12 +133,12 @@ class IGN:
 
     @staticmethod
     def get_info(game):    
-        return IGN.get_game_info(game.id, game.link)
+        return IGN.get_game_info(game.link)
         
     @staticmethod
-    def get_game_info(id, link):
+    def get_game_info(link):
         info = GameInfo()
-        info.id = id
+        info.id = get_id(link)
         try:
             html = urllib2.urlopen(link).read()
         except: 
@@ -177,7 +177,6 @@ class IGN:
         score_items = soup.findAll(attrs = { "class" : "score-item" })
         parse_score_items(score_items, info)
         
-        print info.get_insert_values()
         return info
     
     """
@@ -223,7 +222,6 @@ class IGN:
                 game.last_updated = datetime.strptime(update, '%b %d, %Y')
             
             games.append(game)
-            print game.get_insert_values()
         return games
            
     @staticmethod
@@ -270,7 +268,7 @@ def parse_details1(details1, info):
                     elif active_dt1 == 2:
                         info.developer = detail1.strip() if is_nav_str(detail1) else detail1.text.strip()
                     active_dt1 = None    
-    print "details1: \"%s\" | \"%s\" | \"%s\"" % ( info.genre, info.publisher, info.developer )    
+    #print "details1: \"%s\" | \"%s\" | \"%s\"" % ( info.genre, info.publisher, info.developer )    
 
 def parse_details2(details2, info):
     dt2 = [ 'Release Date:', 'Cancelled', 'Also on:', 'Exclusively on:', 'MSRP:', 'ESRB:' ]
@@ -302,7 +300,7 @@ def parse_details2(details2, info):
                     elif active_dt2 == 5:
                         info.esrb_reason = (detail2.strip() if is_nav_str(detail2) else detail2.text.strip())[2:]
                     active_dt2 = None    
-    print "details2: \"%s\" | \"%s\" | \"%s\"" % ( info.release_date_text, info.also_on, info.msrp )    
+    #print "details2: \"%s\" | \"%s\" | \"%s\"" % ( info.release_date_text, info.also_on, info.msrp )    
     
 def parse_score_items(score_items, info):
     if score_items is not None and len(score_items) == 2:
@@ -337,6 +335,27 @@ def is_number(s):
 def is_nav_str(var):
     return var.__class__.__name__ == 'NavigableString'
 
+"""
+Returns (id, id1, id2) from any given
+ign game link.
+"""
+def get_ids(link):
+    match = re.search("http://.+/objects/(?P<id1>[^/]+)/(?P<id2>[^\.]+).html", link)
+    if match:
+        id1 = match.group("id1").strip()
+        id2 = match.group("id2").strip()
+        return (id1 + id2, id1, id2)
+    else:
+        return (None, None, None)
+
+"""
+Returns the combined id from any given
+ign game link.
+"""
+def get_id(link):
+    (id, id1, id2) = get_ids(link)
+    return id
+        
 def get_ign_url(system, letterNum):
     letter = 'other' if letterNum >= len(letters) else letters[letterNum]
     return "http://www.ign.com/_views/ign/ign_tinc_games_by_platform.ftl" \
@@ -347,13 +366,14 @@ def get_ign_summary_url(id2):
 
 def get_ign_search_url(search):
     return "http://search-api.ign.com/solr/ign.media.object/select/?wt=xml&json.wrf=jsonp1312052095285&_=1312052109888&q=%s&limit=10&timestamp=1312052109888&rows=5&df=title&qt=timelinehandler" % search.replace(' ', '%20')
-    
-def main():
-    print "MAIN"
+
+def test_parse_page():
     IGN.copy_blank_db(DATABASE_FILENAME)
     games = IGN.parse_page('x360', 0)
     for game in games:
         if game is not None:
+            print game.get_insert_values()
+            print ""
             game.insert_into_db(DATABASE_FILENAME)
     infos = {}
     for game in games:
@@ -363,6 +383,21 @@ def main():
                 info.insert_into_db(DATABASE_FILENAME)
                 infos[game.id] = info
                 print info.get_insert_values()
+                print ""
+
+def test_search():
+    results = IGN.search('catherine')
+    for result in results:
+        if result is not None:
+            print result
+            print get_ids(result.link)
+            print ""
+                
+def main():
+    print "__main__"
+    test_search()
+    test_parse_page()
+
 
 if __name__ == "__main__":
     main()
