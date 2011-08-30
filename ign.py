@@ -8,6 +8,8 @@ import sys
 import re
 import shutil
 
+__author__ = "Anthony Casagrande <anthonyjcasagrande@gmail.com>"
+__version__ = "0.4"
 
 DATABASE_FILENAME = 'ign.s3db'
 DATABASE_SCHEMA_FILENAME = 'ign.schema.s3db'
@@ -32,6 +34,17 @@ class Game:
     def get_insert_values(self):
         return [ self.id, self.id1, self.id2, self.name, self.link, self.rating, self.system, self.last_updated ]
 
+    def insert_into_db(self, filename):
+        conn = sqlite3.connect(filename)
+        cursor = conn.cursor()
+        try:
+            cursor.execute(Game.get_insert_string(), self.get_insert_values())
+        except:
+            print "Error inserting game row into database:\n\t%s" % (self.get_insert_values())
+        finally:
+            conn.commit()
+            cursor.close()        
+        
     def __repr__(self):
         return "%s | %s | %s | %s | %s | %s | %s" % (self.system, self.rating, self.last_updated, self.name, self.id1, self.id2, self.id)
         
@@ -66,6 +79,17 @@ class GameInfo:
     def get_insert_values(self):
         return [ self.id, self.thumbnail, self.summary, self.genre, self.publisher, self.developer, self.release_date_text, self.msrp, self.also_on, self.ign_score, self.press_score, self.press_count, self.reader_score, self.reader_count, self.release_date, self.esrb_rating, self.esrb_reason ]
 
+    def insert_into_db(self, filename):
+        conn = sqlite3.connect(filename)
+        cursor = conn.cursor()
+        try:
+            cursor.execute(GameInfo.get_insert_string(), self.get_insert_values())
+        except:
+            print "Error inserting game info row into database:\n\t%s" % (self.get_insert_values())
+        finally:
+            conn.commit()
+            cursor.close()        
+        
 class SearchResult:
     def __init__(self):
         self.title = None
@@ -77,70 +101,154 @@ class SearchResult:
         
     def __repr__(self):
         return "%s | %s | %s | %s | %s" % ( self.title, self.system, self.score, self.boxart, self.link )
+
+"""
+Class that contains all of the public API functions
+"""
+class IGN:
+    """
+    Returns a list of Game objects that are returned from
+    performing a search on ign, or None if no games are found. 
+    """
+    @staticmethod
+    def search(search):
+        url = get_ign_search_url(search)
+        try:
+            xml = urllib2.urlopen(url).read()
+        except: 
+            return None
+        soup = BeautifulSoup(xml)
+        docs = soup.findAll('doc')
+        results = []
+        for doc in docs:
+            result = SearchResult()
+            result.title = get_ign_value(doc, "title")
+            result.system = get_ign_value(doc, "platformName")
+            result.score = get_ign_value(doc, "objectScoreNumeric")
+            result.boxart = get_ign_value(doc, "boxArt")
+            result.description = get_ign_value(doc, "description")
+            result.link = get_ign_value(doc, "url")
+            results.append(result)
+        return results
+
+    @staticmethod
+    def get_info(game):    
+        return IGN.get_game_info(game.id, game.link)
         
+    @staticmethod
+    def get_game_info(id, link):
+        info = GameInfo()
+        info.id = id
+        try:
+            html = urllib2.urlopen(link).read()
+        except: 
+            return None  
+        soup = BeautifulSoup(html)
+        about = soup.find(id='about-tabs-data')
+        if about is not None:
+            thumb = soup.find(attrs = { "class" : "img-thumb" })
+            
+            if thumb is not None:
+                img_thumb = thumb.find('img')
+                try:
+                    info.thumbnail = img_thumb['src']
+                except KeyError: 
+                    info.thumbnail = None
+                
+            summary_node = about.find(attrs = { "class" : "column-about-boxart" })
+            if summary_node is not None:
+                info.summary = summary_node.text
+            
+            details1 = about.find(attrs = { "class" : "column-about-details" })
+            parse_details1(details1, info)
+
+            details2 = about.find(attrs = { "class" : "column-about-details-2" })
+            parse_details2(details2, info)
+        
+        ign_score_node = soup.find(attrs = { "class" : "value integer" })
+        if ign_score_node is not None:
+            info.ign_score = ign_score_node.text.strip()
+        
+        score_items = soup.findAll(attrs = { "class" : "score-item" })
+        parse_score_items(score_items, info)
+        
+        print info.get_insert_values()
+        return info
+    
+    """
+    Returns a list of Game objects returned by a
+    scrape of a game list page for a certain
+    system and letter. 
+    """
+    @staticmethod
+    def parse_page(system, letterNum):
+        url = get_ign_url(system, letterNum)
+        print url
+        try:
+            html = urllib2.urlopen(url).read()
+        except:
+            print "Error reading url: %s" % (url)
+            return None
+        soup = BeautifulSoup(html)
+        gs = soup.findAll(attrs = { "class" : "no-pad-btm" })
+        games = []
+        for g in gs:
+            game = Game()
+            listings = g.findAll(attrs = { "class" : "listings first" })
+            name_node = listings[0]
+            a_name = name_node.find('a')
+            rating_node = listings[1]
+            h3_rating = rating_node.find('h3')
+            update_node = listings[2]
+            h3_update = update_node.find('h3')
+            
+            game.name = a_name.text
+            game.link = a_name['href']
+            tokens = game.link.split('/')
+            game.id1 = tokens[4]
+            game.id2 = tokens[5].replace('.html', '')
+            game.id = game.id1 + game.id2
+            game.rating = h3_rating.text
+            if game.rating == 'NR':
+                game.rating = None
+            update = h3_update.text
+            if update == '':
+                game.last_updated = None
+            else:
+                game.last_updated = datetime.strptime(update, '%b %d, %Y')
+            
+            games.append(game)
+            print game.get_insert_values()
+        return games
+           
+    @staticmethod
+    def parse_system(system):
+        for i in range(len(letters) + 1):
+            games = IGN.parse_page(system, i)
+            infos = {}
+            for game in games:
+                info = IGN.get_game_info(game)
+                infos[game.id] = info
+                print info.get_insert_values()
+
+    @staticmethod
+    def parse_all():
+        for system in systems:
+            IGN.parse_system(system)
+            
+    @staticmethod
+    def copy_blank_db(filename):
+        try:
+            shutil.copy(DATABASE_SCHEMA_FILENAME, filename)
+        except IOError:
+            print "Error copying %s to %s" % (DATABASE_SCHEMA_FILENAME, filename)
+
 def get_ign_value(doc, name):
     try:
         return doc.find(attrs = { "name" : name }).text.strip()
-    except: return None
- 
-def search_ign(search):
-    url = get_ign_search_url(search)
-    try:
-        xml = urllib2.urlopen(url).read()
-    except: return None
-    soup = BeautifulSoup(xml)
-    docs = soup.findAll('doc')
-    results = []
-    for doc in docs:
-        result = SearchResult()
-        result.title = get_ign_value(doc, "title")
-        result.system = get_ign_value(doc, "platformName")
-        result.score = get_ign_value(doc, "objectScoreNumeric")
-        result.boxart = get_ign_value(doc, "boxArt")
-        result.description = get_ign_value(doc, "description")
-        result.link = get_ign_value(doc, "url")
-        results.append(result)
-    return results
-
-def parse_ign_game_info(game):
-    info = GameInfo()
-    info.id = game.id
-    url = game.link #get_ign_summary_url(id2)
-    try:
-        html = urllib2.urlopen(url).read()
-    except: return None  
-    soup = BeautifulSoup(html)
-    about = soup.find(id='about-tabs-data')
-    if about is not None:
-        thumb = soup.find(attrs = { "class" : "img-thumb" })
-        
-        if thumb is not None:
-            img_thumb = thumb.find('img')
-            try:
-                info.thumbnail = img_thumb['src']
-            except KeyError: 
-                info.thumbnail = None
+    except: 
+        return None
             
-        summary_node = about.find(attrs = { "class" : "column-about-boxart" })
-        if summary_node is not None:
-            info.summary = summary_node.text
-        
-        details1 = about.find(attrs = { "class" : "column-about-details" })
-        parse_details1(details1, info)
-
-        details2 = about.find(attrs = { "class" : "column-about-details-2" })
-        parse_details2(details2, info)
-    
-    ign_score_node = soup.find(attrs = { "class" : "value integer" })
-    if ign_score_node is not None:
-        info.ign_score = ign_score_node.text.strip()
-    
-    score_items = soup.findAll(attrs = { "class" : "score-item" })
-    parse_score_items(score_items, info)
-    
-    print info.get_insert_values()
-    return info
-
 def parse_details1(details1, info):
     dt1 = [ 'Genre:', 'Publisher:', 'Developer:' ]
     active_dt1 = None
@@ -223,76 +331,7 @@ def is_number(s):
         
 def is_nav_str(var):
     return var.__class__.__name__ == 'NavigableString'
-    
-def parse_ign_all():
-    for system in systems:
-        parse_ign_system(system)
 
-def parse_ign_system(system):
-    for i in range(len(letters) + 1):
-        parse_ign_page(system, i)
-
-def parse_ign_page(system, letterNum):
-    url = get_ign_url(system, letterNum)
-    print url
-    try:
-        html = urllib2.urlopen(url).read()
-    except:
-        return
-    soup = BeautifulSoup(html)
-    gs = soup.findAll(attrs = { "class" : "no-pad-btm" })
-    games = []
-    for g in gs:
-        game = Game()
-        listings = g.findAll(attrs = { "class" : "listings first" })
-        name_node = listings[0]
-        a_name = name_node.find('a')
-        rating_node = listings[1]
-        h3_rating = rating_node.find('h3')
-        update_node = listings[2]
-        h3_update = update_node.find('h3')
-        
-        game.name = a_name.text
-        game.link = a_name['href']
-        tokens = game.link.split('/')
-        game.id1 = tokens[4]
-        game.id2 = tokens[5].replace('.html', '')
-        game.id = game.id1 + game.id2
-        game.rating = h3_rating.text
-        if game.rating == 'NR':
-            game.rating = None
-        update = h3_update.text
-        if update == '':
-            game.last_updated = None
-        else:
-            game.last_updated = datetime.strptime(update, '%b %d, %Y')
-        
-        games.append(game)
-        print game
-        
-        conn = sqlite3.connect(DATABASE_FILENAME)
-        cursor = conn.cursor()
-        try:
-            cursor.execute(Game.get_insert_string(), game.get_insert_values())
-        except:
-            print "Error inserting game row into database"
-            conn.commit()
-            cursor.close()
-            return None
-        conn.commit()
-        cursor.close()
-        
-        game_info = parse_ign_game_info(game)
-        
-        conn2 = sqlite3.connect(DATABASE_FILENAME)
-        cursor2 = conn2.cursor()
-        try:
-            cursor2.execute(GameInfo.get_insert_string(), game_info.get_insert_values())
-        except:
-            print "Error inserting game_info row into database"
-        conn2.commit()
-        cursor2.close()
-        
 def get_ign_url(system, letterNum):
     letter = 'other' if letterNum >= len(letters) else letters[letterNum]
     return "http://www.ign.com/_views/ign/ign_tinc_games_by_platform.ftl" \
@@ -303,21 +342,22 @@ def get_ign_summary_url(id2):
 
 def get_ign_search_url(search):
     return "http://search-api.ign.com/solr/ign.media.object/select/?wt=xml&json.wrf=jsonp1312052095285&_=1312052109888&q=%s&limit=10&timestamp=1312052109888&rows=5&df=title&qt=timelinehandler" % search.replace(' ', '%20')
-
-def copy_blank_db():
-    try:
-        shutil.copy(DATABASE_SCHEMA_FILENAME, DATABASE_FILENAME)
-    except IOError:
-        print "Error copying %s" % DATABASE_SCHEMA_FILENAME
-        
+    
 def main():
     print "MAIN"
-    copy_blank_db()
-    #parse_ign_all()
-    parse_ign_page('x360', 0)
-    #results = search_ign('catherine')
-    #for result in results:
-    #    print str(result) + "\n"
+    IGN.copy_blank_db(DATABASE_FILENAME)
+    games = IGN.parse_page('x360', 0)
+    for game in games:
+        if game is not None:
+            game.insert_into_db(DATABASE_FILENAME)
+    infos = {}
+    for game in games:
+        if game is not None:
+            info = IGN.get_info(game)
+            if info is not None:
+                info.insert_into_db(DATABASE_FILENAME)
+                infos[game.id] = info
+                print info.get_insert_values()
 
 if __name__ == "__main__":
     main()
