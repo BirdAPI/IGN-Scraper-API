@@ -46,7 +46,7 @@ class Game:
             cursor.close()        
         
     def __repr__(self):
-        return "%s | %s | %s | %s | %s | %s | %s" % (self.system, self.rating, self.last_updated, self.name, self.id1, self.id2, self.id)
+        return repr(self.get_insert_values())
         
 class GameInfo:
     def __init__(self):
@@ -88,7 +88,10 @@ class GameInfo:
             print "Error inserting game info row into database:\n\t%s" % (self.get_insert_values())
         finally:
             conn.commit()
-            cursor.close()        
+            cursor.close()
+
+    def __repr__(self):
+        return repr(self.get_insert_values())            
         
 class SearchResult:
     def __init__(self):
@@ -100,7 +103,7 @@ class SearchResult:
         self.link = None      
         
     def __repr__(self):
-        return "%s | %s | %s | %s | %s" % ( self.title, self.system, self.score, self.boxart, self.link )
+        return repr([ self.title, self.system, self.score, self.boxart, self.description, self.link ])
 
 """
 Class that contains all of the public API functions
@@ -138,7 +141,7 @@ class IGN:
     @staticmethod
     def get_game_info(link):
         info = GameInfo()
-        info.id = get_id(link)
+        info.id = IGN.get_id(link)
         try:
             html = urllib2.urlopen(link).read()
         except: 
@@ -232,12 +235,35 @@ class IGN:
             for game in games:
                 info = IGN.get_game_info(game)
                 infos[game.id] = info
-                print info.get_insert_values()
+                print info
 
     @staticmethod
     def parse_all():
         for system in systems:
             IGN.parse_system(system)
+            
+    """
+    Returns (id, id1, id2) from any given
+    ign game link.
+    """
+    @staticmethod
+    def get_ids(link):
+        match = re.search("http://.+/objects/(?P<id1>[^/]+)/(?P<id2>[^\.]+).html", link)
+        if match:
+            id1 = match.group("id1").strip()
+            id2 = match.group("id2").strip()
+            return (id1 + id2, id1, id2)
+        else:
+            return (None, None, None)
+
+    """
+    Returns the combined id from any given
+    ign game link.
+    """
+    @staticmethod
+    def get_id(link):
+        (id, id1, id2) = IGN.get_ids(link)
+        return id
             
     @staticmethod
     def copy_blank_db(filename):
@@ -334,27 +360,6 @@ def is_number(s):
         
 def is_nav_str(var):
     return var.__class__.__name__ == 'NavigableString'
-
-"""
-Returns (id, id1, id2) from any given
-ign game link.
-"""
-def get_ids(link):
-    match = re.search("http://.+/objects/(?P<id1>[^/]+)/(?P<id2>[^\.]+).html", link)
-    if match:
-        id1 = match.group("id1").strip()
-        id2 = match.group("id2").strip()
-        return (id1 + id2, id1, id2)
-    else:
-        return (None, None, None)
-
-"""
-Returns the combined id from any given
-ign game link.
-"""
-def get_id(link):
-    (id, id1, id2) = get_ids(link)
-    return id
         
 def get_ign_url(system, letterNum):
     letter = 'other' if letterNum >= len(letters) else letters[letterNum]
@@ -372,7 +377,7 @@ def test_parse_page():
     games = IGN.parse_page('x360', 0)
     for game in games:
         if game is not None:
-            print game.get_insert_values()
+            print game
             print ""
             game.insert_into_db(DATABASE_FILENAME)
     infos = {}
@@ -382,7 +387,7 @@ def test_parse_page():
             if info is not None:
                 info.insert_into_db(DATABASE_FILENAME)
                 infos[game.id] = info
-                print info.get_insert_values()
+                print info
                 print ""
 
 def test_search():
@@ -390,13 +395,15 @@ def test_search():
     for result in results:
         if result is not None:
             print result
-            print get_ids(result.link)
             print ""
-                
+            info = IGN.get_game_info(result.link)
+            print info
+            print ""
+            
 def main():
     print "__main__"
     test_search()
-    test_parse_page()
+    #test_parse_page()
 
 
 if __name__ == "__main__":
