@@ -8,13 +8,13 @@ import sys
 import re
 import shutil
 
-__author__ = "Anthony Casagrande <anthonyjcasagrande@gmail.com>"
+__author__ = "Anthony Casagrande <birdapi@gmail.com>"
 __version__ = "0.4"
 
 DATABASE_FILENAME = 'ign.s3db'
 DATABASE_SCHEMA_FILENAME = 'ign.schema.s3db'
-letters = 'abcdefghijklmnopqrstuvwxyz'
-systems = [ 'x360', 'ps3', 'wii', 'pc', 'psp', 'ds' ]
+LETTERS = 'abcdefghijklmnopqrstuvwxyz'
+SYSTEMS = [ 'x360', 'ps3', 'wii', 'pc', 'psp', 'ds' ]
 
 class Game:
     def __init__(self):
@@ -28,17 +28,17 @@ class Game:
         self.last_updated = None
     
     @staticmethod    
-    def get_insert_string():
-        return "INSERT INTO game (id,id1,id2,name,link,rating,system,last_updated) VALUES (?,?,?,?,?,?,?,?)"
+    def get_insert_string(table_name = "game"):
+        return "INSERT INTO %s (id,id1,id2,name,link,rating,system,last_updated) VALUES (?,?,?,?,?,?,?,?)" % table_name
     
     def get_insert_values(self):
         return [ self.id, self.id1, self.id2, self.name, self.link, self.rating, self.system, self.last_updated ]
 
-    def insert_into_db(self, filename):
+    def insert_into_db(self, filename, table_name = "game"):
         conn = sqlite3.connect(filename)
         cursor = conn.cursor()
         try:
-            cursor.execute(Game.get_insert_string(), self.get_insert_values())
+            cursor.execute(Game.get_insert_string(table_name), self.get_insert_values())
         except:
             print "Error inserting game row into database:\n\t%s" % (self.get_insert_values())
         finally:
@@ -68,22 +68,24 @@ class GameInfo:
         self.esrb_rating = None
         self.esrb_reason = None
         
+        self.link = None
+        
     @staticmethod    
-    def get_insert_string():
-        return "INSERT INTO game_info " \
+    def get_insert_string(table_name = "game_info"):
+        return "INSERT INTO %s " \
                 "(id,thumbnail,summary,genre,publisher,developer,release_date_text," \
                 "msrp,also_on,ign_score,press_score,press_count,reader_score,reader_count," \
                 "release_date,esrb_rating,esrb_reason) " \
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)" % table_name
     
     def get_insert_values(self):
         return [ self.id, self.thumbnail, self.summary, self.genre, self.publisher, self.developer, self.release_date_text, self.msrp, self.also_on, self.ign_score, self.press_score, self.press_count, self.reader_score, self.reader_count, self.release_date, self.esrb_rating, self.esrb_reason ]
 
-    def insert_into_db(self, filename):
+    def insert_into_db(self, filename, table_name = "game_info"):
         conn = sqlite3.connect(filename)
         cursor = conn.cursor()
         try:
-            cursor.execute(GameInfo.get_insert_string(), self.get_insert_values())
+            cursor.execute(GameInfo.get_insert_string(table_name), self.get_insert_values())
         except:
             print "Error inserting game info row into database:\n\t%s" % (self.get_insert_values())
         finally:
@@ -142,6 +144,7 @@ class IGN:
     def get_game_info(link):
         info = GameInfo()
         info.id = IGN.get_id(link)
+        info.link = link
         try:
             html = urllib2.urlopen(link).read()
         except: 
@@ -229,17 +232,19 @@ class IGN:
            
     @staticmethod
     def parse_system(system):
-        for i in range(len(letters) + 1):
+        for i in range(len(LETTERS) + 1):
             games = IGN.parse_page(system, i)
             infos = {}
             for game in games:
                 info = IGN.get_game_info(game)
+                if info is None:
+                    info = IGN.get_game_info(result.link)
                 infos[game.id] = info
                 print info
 
     @staticmethod
     def parse_all():
-        for system in systems:
+        for system in SYSTEMS:
             IGN.parse_system(system)
             
     """
@@ -362,7 +367,7 @@ def is_nav_str(var):
     return var.__class__.__name__ == 'NavigableString'
         
 def get_ign_url(system, letterNum):
-    letter = 'other' if letterNum >= len(letters) else letters[letterNum]
+    letter = 'other' if letterNum >= len(LETTERS) else LETTERS[letterNum]
     return "http://www.ign.com/_views/ign/ign_tinc_games_by_platform.ftl" \
             "?platform=%s&sort=title&order=asc&max=50000&sortOrders=axxx&catalogLetter=%s" % (system, letter) 
 
@@ -397,13 +402,15 @@ def test_search():
             print result
             print ""
             info = IGN.get_game_info(result.link)
+            if info is None:
+                info = IGN.get_game_info(result.link)
             print info
             print ""
             
 def main():
     print "__main__"
     test_search()
-    #test_parse_page()
+    test_parse_page()
 
 
 if __name__ == "__main__":
