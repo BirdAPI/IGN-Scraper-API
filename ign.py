@@ -170,7 +170,7 @@ class IGN:
         
         txt_tagline = soup.find("div", attrs={"class":"txt-tagline"})
         if txt_tagline:
-            info.release_date_text = txt_tagline.text.strip()
+            info.release_date_text = txt_tagline.text.replace("Release Date:", "").strip()
             try:
                 info.release_date = datetime.strptime(info.release_date_text, '%B %d, %Y')
             except:
