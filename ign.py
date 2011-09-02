@@ -142,7 +142,7 @@ class IGN:
         return IGN.get_game_info(game.link)
         
     @staticmethod
-    def get_game_info(link):
+    def get_game_info(link, max_retries = 2, retry_count = 0):
         info = GameInfo()
         info.id = IGN.get_id(link)
         info.link = link
@@ -152,9 +152,12 @@ class IGN:
             return None  
         soup = BeautifulSoup(html)
         
-        title = soup.find("title").text
-        if title == "IGN Advertisement":
-            return get_game_info(link)
+        title = soup.find("title")
+        if not title or title.text == "IGN Advertisement":
+            if retry_count < max_retries:
+                return get_game_info(link, max_retries, retry_count + 1)
+            else
+                return None
             
         about = soup.find(id='about-tabs-data')
         if about is not None:
