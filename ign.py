@@ -151,6 +151,11 @@ class IGN:
         except: 
             return None  
         soup = BeautifulSoup(html)
+        
+        title = soup.find("title").text
+        if title == "IGN Advertisement":
+            return get_game_info(link)
+            
         about = soup.find(id='about-tabs-data')
         if about is not None:
             thumb = soup.find(attrs = { "class" : "img-thumb" })
