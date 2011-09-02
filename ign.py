@@ -71,17 +71,18 @@ class GameInfo:
         self.release_date = None
         self.esrb_rating = None
         self.esrb_reason = None
+        self.boxart = None
         
     @staticmethod    
     def get_insert_string(table_name = "game_info"):
         return "INSERT INTO %s " \
                 "(id,name,system,link,thumbnail,summary,genre,publisher,developer,release_date_text," \
                 "msrp,also_on,ign_score,press_score,press_count,reader_score,reader_count," \
-                "release_date,esrb_rating,esrb_reason) " \
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)" % table_name
+                "release_date,esrb_rating,esrb_reason,boxart) " \
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)" % table_name
     
     def get_insert_values(self):
-        return [ self.id, self.name, self.system, self.link, self.thumbnail, self.summary, self.genre, self.publisher, self.developer, self.release_date_text, self.msrp, self.also_on, self.ign_score, self.press_score, self.press_count, self.reader_score, self.reader_count, self.release_date, self.esrb_rating, self.esrb_reason ]
+        return [ self.id, self.name, self.system, self.link, self.thumbnail, self.summary, self.genre, self.publisher, self.developer, self.release_date_text, self.msrp, self.also_on, self.ign_score, self.press_score, self.press_count, self.reader_score, self.reader_count, self.release_date, self.esrb_rating, self.esrb_reason, self.boxart ]
 
     def insert_into_db(self, filename, table_name = "game_info"):
         conn = sqlite3.connect(filename)
@@ -175,6 +176,10 @@ class IGN:
                 info.release_date = datetime.strptime(info.release_date_text, '%B %d, %Y')
             except:
                 info.release_date = None
+        
+        hub_featured0 = soup.find("img", id="hub_featured0")
+        if hub_featured0:
+            info.boxart = hub_featured0["src"]
         
         about = soup.find(id='about-tabs-data')
         if about is not None:
