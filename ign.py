@@ -217,7 +217,7 @@ class IGN:
             tokens = game.link.split('/')
             game.id1 = tokens[4]
             game.id2 = tokens[5].replace('.html', '')
-            game.id = game.id1 + game.id2
+            game.id = game.id1 + "_" + game.id2
             game.rating = h3_rating.text
             if game.rating == 'NR':
                 game.rating = None
@@ -257,7 +257,7 @@ class IGN:
         if match:
             id1 = match.group("id1").strip()
             id2 = match.group("id2").strip()
-            return (id1 + id2, id1, id2)
+            return (id1 + "_" + id2, id1, id2)
         else:
             return (None, None, None)
 
@@ -411,7 +411,7 @@ def test_search(query, get_infos):
 def main():
     print "__main__"
     test_search("Call of duty", False)
-    #test_parse_page()
+    test_parse_page()
 
 
 if __name__ == "__main__":
