@@ -30,7 +30,7 @@ class Game:
     
     @staticmethod    
     def get_insert_string(table_name = "game"):
-        return "INSERT INTO %s (id,id1,id2,subdomain,name,link,rating,system,last_updated) VALUES (?,?,?,?,?,?,?,?)" % table_name
+        return "INSERT INTO %s (id,id1,id2,subdomain,name,link,rating,system,last_updated) VALUES (?,?,?,?,?,?,?,?,?)" % table_name
     
     def get_insert_values(self):
         return [ self.id, self.id1, self.id2, self.subdomain, self.name, self.link, self.rating, self.system, self.last_updated ]
