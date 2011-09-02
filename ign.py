@@ -21,6 +21,7 @@ class Game:
         self.id = None
         self.id1 = None
         self.id2 = None
+        self.subdomain = None
         self.name = None
         self.link = None
         self.rating = None
@@ -29,10 +30,10 @@ class Game:
     
     @staticmethod    
     def get_insert_string(table_name = "game"):
-        return "INSERT INTO %s (id,id1,id2,name,link,rating,system,last_updated) VALUES (?,?,?,?,?,?,?,?)" % table_name
+        return "INSERT INTO %s (id,id1,id2,subdomain,name,link,rating,system,last_updated) VALUES (?,?,?,?,?,?,?,?)" % table_name
     
     def get_insert_values(self):
-        return [ self.id, self.id1, self.id2, self.name, self.link, self.rating, self.system, self.last_updated ]
+        return [ self.id, self.id1, self.id2, self.subdomain, self.name, self.link, self.rating, self.system, self.last_updated ]
 
     def insert_into_db(self, filename, table_name = "game"):
         conn = sqlite3.connect(filename)
@@ -215,9 +216,10 @@ class IGN:
             game.name = a_name.text
             game.link = a_name['href']
             tokens = game.link.split('/')
+            game.subdomain = tokens[2][ : tokens[2].find('.')]
             game.id1 = tokens[4]
             game.id2 = tokens[5].replace('.html', '')
-            game.id = game.id1 + "_" + game.id2
+            game.id = game.id1 + "_" + game.id2 + "_" + game.subdomain
             game.rating = h3_rating.text
             if game.rating == 'NR':
                 game.rating = None
@@ -253,22 +255,39 @@ class IGN:
     """
     @staticmethod
     def get_ids(link):
-        match = re.search("http://.+/objects/(?P<id1>[^/]+)/(?P<id2>[^\.]+).html", link)
+        match = re.search("http://(?P<subdomain>.+).ign.com/objects/(?P<id1>[^/]+)/(?P<id2>[^\.]+).html", link)
         if match:
             id1 = match.group("id1").strip()
             id2 = match.group("id2").strip()
-            return (id1 + "_" + id2, id1, id2)
+            subdomain = match.group("subdomain")
+            return (id1 + "_" + id2 + "_" + subdomain, id1, id2, subdomain)
+        else:
+            return (None, None, None, None)
+
+    """
+    Given and id in the format id1_id2_subdomain, return (id1, id2, subdomain)
+    """
+    @staticmethod
+    def split_id(id):
+        tokens = id.split('_')
+        if len(tokens) == 3:
+            return (tokens[0], tokens[1], tokens[2])
         else:
             return (None, None, None)
-
+        
     """
     Returns the combined id from any given
     ign game link.
     """
     @staticmethod
     def get_id(link):
-        (id, id1, id2) = IGN.get_ids(link)
+        (id, id1, id2, subomain) = IGN.get_ids(link)
         return id
+        
+    @staticmethod
+    def get_info_link(id):
+        (id1, id2, subdomain) = IGN.split_id(id)
+        return "http://%s.ign.com/objects/%s/%s.html" % (subdomain, id1, id2)
             
     @staticmethod
     def copy_blank_db(filename):
