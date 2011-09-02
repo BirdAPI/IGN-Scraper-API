@@ -73,17 +73,19 @@ class GameInfo:
         self.esrb_reason = None
         self.boxart = None
         self.highlight_image = None
+        self.text_review = None
+        self.video_review = None
         
     @staticmethod    
     def get_insert_string(table_name = "game_info"):
         return "INSERT INTO %s " \
                 "(id,name,system,link,thumbnail,summary,genre,publisher,developer,release_date_text," \
                 "msrp,also_on,ign_score,press_score,press_count,reader_score,reader_count," \
-                "release_date,esrb_rating,esrb_reason,boxart,highlight_image) " \
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)" % table_name
+                "release_date,esrb_rating,esrb_reason,boxart,highlight_image,text_review,video_review) " \
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)" % table_name
     
     def get_insert_values(self):
-        return [ self.id, self.name, self.system, self.link, self.thumbnail, self.summary, self.genre, self.publisher, self.developer, self.release_date_text, self.msrp, self.also_on, self.ign_score, self.press_score, self.press_count, self.reader_score, self.reader_count, self.release_date, self.esrb_rating, self.esrb_reason, self.boxart, self.highlight_image ]
+        return [ self.id, self.name, self.system, self.link, self.thumbnail, self.summary, self.genre, self.publisher, self.developer, self.release_date_text, self.msrp, self.also_on, self.ign_score, self.press_score, self.press_count, self.reader_score, self.reader_count, self.release_date, self.esrb_rating, self.esrb_reason, self.boxart, self.highlight_image, self.text_review, self.video_review ]
 
     def insert_into_db(self, filename, table_name = "game_info"):
         conn = sqlite3.connect(filename)
@@ -189,6 +191,13 @@ class IGN:
             highlight_image = soup.find("a", attrs={"class":"highlight-image"})
             if highlight_image:
                 info.highlight_image = highlight_image["style"].replace("background:url(", "").replace(")", "")
+        
+        lnks = soup.findAll("a", attrs={"class":"article-highlight-lnk"})
+        for lnk in lnks:
+            if lnk.text == "Read the Review":
+                info.text_review = lnk["href"]
+            elif lnk.text == "Watch the Review":
+                info.video_review = lnk["href"]
         
         about = soup.find(id='about-tabs-data')
         if about is not None:
