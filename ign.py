@@ -260,7 +260,7 @@ class IGN:
             id1 = match.group("id1").strip()
             id2 = match.group("id2").strip()
             subdomain = match.group("subdomain")
-            return (id1 + "_" + id2 + "_" + subdomain, id1, id2, subdomain)
+            return ("%s_%s_%s" % (id1, id2, subdomain), id1, id2, subdomain)
         else:
             return (None, None, None, None)
 
@@ -281,7 +281,7 @@ class IGN:
     """
     @staticmethod
     def get_id(link):
-        (id, id1, id2, subomain) = IGN.get_ids(link)
+        (id, id1, id2, subdomain) = IGN.get_ids(link)
         return id
         
     @staticmethod
