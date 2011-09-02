@@ -155,7 +155,7 @@ class IGN:
         title = soup.find("title")
         if not title or title.text == "IGN Advertisement":
             if retry_count < max_retries:
-                return get_game_info(link, max_retries, retry_count + 1)
+                return IGN.get_game_info(link, max_retries, retry_count + 1)
             else:
                 return None
             
