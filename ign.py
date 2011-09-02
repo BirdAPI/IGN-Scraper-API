@@ -374,8 +374,8 @@ def get_ign_url(system, letterNum):
 def get_ign_summary_url(id2):
     return "http://www.ign.com/_views/ign/ign_tinc_game_about.ftl?id=%s&network=12&js_tab=summary&locale=us" % id2
 
-def get_ign_search_url(search):
-    return "http://search-api.ign.com/solr/ign.media.object/select/?wt=xml&json.wrf=jsonp1312052095285&_=1312052109888&q=%s&limit=10&timestamp=1312052109888&rows=5&df=title&qt=timelinehandler" % search.replace(' ', '%20')
+def get_ign_search_url(search, rows = 25):
+    return "http://search-api.ign.com/solr/ign.media.object/select/?wt=xml&json.wrf=jsonp1312052095285&_=1312052109888&q=%s&limit=%i&timestamp=1312052109888&rows=%i&df=title&qt=timelinehandler" % (search.replace(' ', '%20'), rows, rows)
 
 def test_parse_page():
     IGN.copy_blank_db(DATABASE_FILENAME)
@@ -395,22 +395,23 @@ def test_parse_page():
                 print info
                 print ""
 
-def test_search():
-    results = IGN.search('catherine')
+def test_search(query, get_infos):
+    results = IGN.search(query)
     for result in results:
         if result is not None:
             print result
             print ""
-            info = IGN.get_game_info(result.link)
-            if info is None:
+            if get_infos:
                 info = IGN.get_game_info(result.link)
-            print info
-            print ""
+                if info is None:
+                    info = IGN.get_game_info(result.link)
+                print info
+                print ""
             
 def main():
     print "__main__"
-    test_search()
-    test_parse_page()
+    test_search("Call of duty", False)
+    #test_parse_page()
 
 
 if __name__ == "__main__":
