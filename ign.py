@@ -2,6 +2,7 @@
 
 from BeautifulSoup import BeautifulSoup
 from datetime import datetime
+import time
 import sqlite3
 import urllib2
 import sys
@@ -9,7 +10,7 @@ import re
 import shutil
 
 __author__ = "Anthony Casagrande <birdapi@gmail.com>"
-__version__ = "0.4"
+__version__ = "0.8"
 
 DATABASE_FILENAME = 'ign.s3db'
 DATABASE_SCHEMA_FILENAME = 'ign.schema.s3db'
@@ -50,7 +51,7 @@ class Game:
         return repr(self.get_insert_values())
         
 class GameInfo:
-    def __init__(self):
+    def __init__(self, row=None):
         self.id = None
         self.name = None
         self.system = None
@@ -75,6 +76,8 @@ class GameInfo:
         self.highlight_image = None
         self.text_review = None
         self.video_review = None
+        if row:
+            self.initialize_from_db(row)
         
     @staticmethod    
     def get_insert_string(table_name = "game_info"):
@@ -97,7 +100,39 @@ class GameInfo:
         finally:
             conn.commit()
             cursor.close()
-
+    
+    #FIND: self.([^ ]+) = None
+    #REPLACE: self.\1 = row["\1"]
+    def initialize_from_db(self, row):
+        self.id = row["id"]
+        self.name = row["name"]
+        self.system = row["system"]
+        self.link = row["link"]
+        self.thumbnail = row["thumbnail"]
+        self.summary = row["summary"]
+        self.genre = row["genre"]
+        self.publisher = row["publisher"]
+        self.developer = row["developer"]
+        self.release_date_text = row["release_date_text"]
+        self.msrp = row["msrp"]
+        self.also_on = row["also_on"]
+        self.ign_score = row["ign_score"]
+        self.press_score = row["press_score"]
+        self.press_count = row["press_count"]
+        self.reader_score = row["reader_score"]
+        self.reader_count = row["reader_count"]
+        self.release_date = row["release_date"]
+        self.esrb_rating = row["esrb_rating"]
+        self.esrb_reason = row["esrb_reason"]
+        self.boxart = row["boxart"]
+        self.highlight_image = row["highlight_image"]
+        self.text_review = row["text_review"]
+        self.video_review = row["video_review"]        
+    
+    @staticmethod
+    def create_from_db(row):
+        return GameInfo(row)
+    
     def __repr__(self):
         return repr(self.get_insert_values())            
         
@@ -161,6 +196,7 @@ class IGN:
         if not title or title.text == "IGN Advertisement":
             if retry_count < max_retries:
                 print "Retry %i of %i: %s" % (retry_count + 1, max_retries, link)
+                time.sleep(100 / 1000.0)
                 return IGN.get_game_info(link, max_retries, retry_count + 1)
             else:
                 return None
