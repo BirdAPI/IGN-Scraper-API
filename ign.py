@@ -1,21 +1,26 @@
 #!/usr/bin/python
 
 from BeautifulSoup import BeautifulSoup
+from cookielib import CookieJar
 from datetime import datetime
+from pprint import pprint
 import time
 import sqlite3
+import urllib
 import urllib2
 import sys
 import re
 import shutil
 
 __author__ = "Anthony Casagrande <birdapi@gmail.com>"
-__version__ = "0.8"
+__version__ = "0.9"
 
 DATABASE_FILENAME = 'ign.s3db'
 DATABASE_SCHEMA_FILENAME = 'ign.schema.s3db'
 LETTERS = 'abcdefghijklmnopqrstuvwxyz'
 SYSTEMS = [ 'x360', 'ps3', 'wii', 'pc', 'psp', 'ds' ]
+
+jar = CookieJar()
 
 class Game:
     def __init__(self):
@@ -28,32 +33,11 @@ class Game:
         self.rating = None
         self.system = None
         self.last_updated = None
-    
-    @staticmethod    
-    def get_insert_string(table_name = "game"):
-        return "INSERT INTO %s (id,id1,id2,subdomain,name,link,rating,system,last_updated) VALUES (?,?,?,?,?,?,?,?,?)" % table_name
-    
-    def get_insert_values(self):
-        return [ self.id, self.id1, self.id2, self.subdomain, self.name, self.link, self.rating, self.system, self.last_updated ]
-
-    def insert_into_db(self, filename, table_name = "game"):
-        conn = sqlite3.connect(filename)
-        cursor = conn.cursor()
-        try:
-            cursor.execute(Game.get_insert_string(table_name), self.get_insert_values())
-        except:
-            print "Error inserting game row into database:\n\t%s" % (self.get_insert_values())
-        finally:
-            conn.commit()
-            cursor.close()        
         
-    def __repr__(self):
-        return repr(self.get_insert_values())
-        
-class GameInfo:
-    def __init__(self, row=None):
+class IGNInfo:
+    def __init__(self):
         self.id = None
-        self.name = None
+        self.title = None
         self.system = None
         self.link = None
         self.thumbnail = None
@@ -61,7 +45,7 @@ class GameInfo:
         self.genre = None
         self.publisher = None
         self.developer = None
-        self.release_date_text = None
+        self.release_date = None
         self.msrp = None
         self.also_on = None
         self.ign_score = None
@@ -69,84 +53,22 @@ class GameInfo:
         self.press_count = None
         self.reader_score = None
         self.reader_count = None
-        self.release_date = None
         self.esrb_rating = None
         self.esrb_reason = None
         self.boxart = None
         self.highlight_image = None
         self.text_review = None
-        self.video_review = None
-        if row:
-            self.initialize_from_db(row)
-        
-    @staticmethod    
-    def get_insert_string(table_name = "game_info"):
-        return "INSERT INTO %s " \
-                "(id,name,system,link,thumbnail,summary,genre,publisher,developer,release_date_text," \
-                "msrp,also_on,ign_score,press_score,press_count,reader_score,reader_count," \
-                "release_date,esrb_rating,esrb_reason,boxart,highlight_image,text_review,video_review) " \
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)" % table_name
-    
-    def get_insert_values(self):
-        return [ self.id, self.name, self.system, self.link, self.thumbnail, self.summary, self.genre, self.publisher, self.developer, self.release_date_text, self.msrp, self.also_on, self.ign_score, self.press_score, self.press_count, self.reader_score, self.reader_count, self.release_date, self.esrb_rating, self.esrb_reason, self.boxart, self.highlight_image, self.text_review, self.video_review ]
-
-    def insert_into_db(self, filename, table_name = "game_info"):
-        conn = sqlite3.connect(filename)
-        cursor = conn.cursor()
-        try:
-            cursor.execute(GameInfo.get_insert_string(table_name), self.get_insert_values())
-        except:
-            print "Error inserting game info row into database:\n\t%s" % (self.get_insert_values())
-        finally:
-            conn.commit()
-            cursor.close()
-    
-    #FIND: self.([^ ]+) = None
-    #REPLACE: self.\1 = row["\1"]
-    def initialize_from_db(self, row):
-        self.id = row["id"]
-        self.name = row["name"]
-        self.system = row["system"]
-        self.link = row["link"]
-        self.thumbnail = row["thumbnail"]
-        self.summary = row["summary"]
-        self.genre = row["genre"]
-        self.publisher = row["publisher"]
-        self.developer = row["developer"]
-        self.release_date_text = row["release_date_text"]
-        self.msrp = row["msrp"]
-        self.also_on = row["also_on"]
-        self.ign_score = row["ign_score"]
-        self.press_score = row["press_score"]
-        self.press_count = row["press_count"]
-        self.reader_score = row["reader_score"]
-        self.reader_count = row["reader_count"]
-        self.release_date = row["release_date"]
-        self.esrb_rating = row["esrb_rating"]
-        self.esrb_reason = row["esrb_reason"]
-        self.boxart = row["boxart"]
-        self.highlight_image = row["highlight_image"]
-        self.text_review = row["text_review"]
-        self.video_review = row["video_review"]        
-    
-    @staticmethod
-    def create_from_db(row):
-        return GameInfo(row)
-    
-    def __repr__(self):
-        return repr(self.get_insert_values())            
+        self.video_review = None           
         
 class SearchResult:
     def __init__(self):
+        self.id = None
         self.title = None
         self.system = None
         self.score = None
         self.boxart = None
         self.description = None
-        self.link = None      
-        
-    def __repr__(self):
-        return repr([ self.title, self.system, self.score, self.boxart, self.description, self.link ])
+        self.link = None
 
 """
 Class that contains all of the public API functions
@@ -157,8 +79,8 @@ class IGN:
     performing a search on ign, or None if no games are found. 
     """
     @staticmethod
-    def search(search):
-        url = get_ign_search_url(search)
+    def search(search, limit = 25):
+        url = get_ign_search_url(search, limit)
         try:
             xml = urllib2.urlopen(url).read()
         except: 
@@ -174,20 +96,17 @@ class IGN:
             result.boxart = get_ign_value(doc, "boxArt")
             result.description = get_ign_value(doc, "description")
             result.link = get_ign_value(doc, "url")
+            result.id = IGN.get_id(result.link)
             results.append(result)
         return results
 
     @staticmethod
-    def get_info(game):    
-        return IGN.get_game_info(game.link)
-        
-    @staticmethod
-    def get_game_info(link, max_retries = 5, retry_count = 0):
-        info = GameInfo()
-        info.id = IGN.get_id(link)
-        info.link = link
+    def get_info(id, max_retries = 5, retry_count = 0):
+        info = IGNInfo()
+        info.id = id
+        info.link = IGN.get_link(id)
         try:
-            html = get_html(link)
+            html = get_html(info.link)
         except: 
             return None  
         soup = BeautifulSoup(html)
@@ -195,26 +114,24 @@ class IGN:
         title = soup.find("title")
         if not title or title.text == "IGN Advertisement":
             if retry_count < max_retries:
-                print "Retry %i of %i: %s" % (retry_count + 1, max_retries, link)
-                time.sleep(100 / 1000.0)
-                return IGN.get_game_info(link, max_retries, retry_count + 1)
+                print "Retry %i of %i: %s" % (retry_count + 1, max_retries, info.link)
+                #force a 404 error, hoping to not get an ad next time
+                get_html("http://www.ign.com/404/")
+                time.sleep(250 / 1000.0)
+                return IGN.get_info(id, max_retries, retry_count + 1)
             else:
                 return None
         
         game_title = soup.find("a", attrs ={"class":"game-title"})
         if game_title:
-            nav_platform = game_title.find("span", attrs={"class":"nav-platform"})
+            nav_platform = game_title.find("span", "nav-platform")
             if nav_platform:
                 info.system = nav_platform.text.strip()
-                info.name = game_title.text.replace(info.system, "").strip()
+                info.title = game_title.text.replace(info.system, "").strip()
         
-        txt_tagline = soup.find("div", attrs={"class":"txt-tagline"})
+        txt_tagline = soup.find("div", "txt-tagline")
         if txt_tagline:
-            info.release_date_text = txt_tagline.text.replace("Release Date:", "").strip()
-            try:
-                info.release_date = datetime.strptime(info.release_date_text, '%B %d, %Y')
-            except:
-                info.release_date = None
+            info.release_date = txt_tagline.text.replace("Release Date:", "").strip()
         
         hub_featured0 = soup.find("img", id="hub_featured0")
         if hub_featured0:
@@ -224,11 +141,11 @@ class IGN:
         if highlight_image:
             info.highlight_image = highlight_image["src"]
         else:
-            highlight_image = soup.find("a", attrs={"class":"highlight-image"})
+            highlight_image = soup.find("a", "highlight-image")
             if highlight_image:
                 info.highlight_image = highlight_image["style"].replace("background:url(", "").replace(")", "")
         
-        lnks = soup.findAll("a", attrs={"class":"article-highlight-lnk"})
+        lnks = soup.findAll("a", "article-highlight-lnk")
         for lnk in lnks:
             if lnk.text == "Read the Review":
                 info.text_review = lnk["href"]
@@ -322,9 +239,9 @@ class IGN:
             games = IGN.parse_page(system, i)
             infos = {}
             for game in games:
-                info = IGN.get_game_info(game)
+                info = IGN.get_info(game.id)
                 if info is None:
-                    info = IGN.get_game_info(result.link)
+                    info = IGN.get_info(result.id)
                 infos[game.id] = info
                 print info
 
@@ -334,7 +251,7 @@ class IGN:
             IGN.parse_system(system)
             
     """
-    Returns (id, id1, id2) from any given
+    Returns (id, id1, id2, subdomain) from any given
     ign game link.
     """
     @staticmethod
@@ -369,7 +286,7 @@ class IGN:
         return id
         
     @staticmethod
-    def get_info_link(id):
+    def get_link(id):
         (id1, id2, subdomain) = IGN.split_id(id)
         return "http://%s.ign.com/objects/%s/%s.html" % (subdomain, id1, id2)
             
@@ -418,11 +335,7 @@ def parse_details2(details2, info):
                     info.esrb_rating = esrb_rating[:esrb_rating.find(' ')]
                 elif active_dt2 is not None and not (is_nav_str(detail2) and detail2.strip() == ""):
                     if active_dt2 == 0:
-                        info.release_date_text = detail2.strip() if is_nav_str(detail2) else detail2.text.strip()
-                        try:
-                            info.release_date = datetime.strptime(info.release_date_text, '%B %d, %Y')
-                        except:
-                            info.release_date = None
+                        info.release_date = detail2.strip() if is_nav_str(detail2) else detail2.text.strip()
                     elif active_dt2 == 1:
                         info.release_date_text = 'Cancelled'
                     elif active_dt2 == 2:
@@ -480,11 +393,27 @@ def get_ign_summary_url(id2):
 def get_ign_search_url(search, rows = 25):
     return "http://search-api.ign.com/solr/ign.media.object/select/?wt=xml&json.wrf=jsonp1312052095285&_=1312052109888&q=%s&limit=%i&timestamp=1312052109888&rows=%i&df=title&qt=timelinehandler" % (search.replace(' ', '%20'), rows, rows)
 
-def get_html(url):
+def get_freq_cookie():
+    #request.add_header("Cookie","freq=c-1315293416308v-26n-12mc+1315293416308mv+26mn+12wwe~0")
+    #request.add_header("Cookie", "freq=c-1315295435642v-61n-12mc+1315295435642mv+61mn+12wwe~0")  #9/6/2011 12:51 am
+    #c-1315296447v-61n-12mc+1315296447+61mn+12wwe~0
+    return "freq=c-%i642v-61n-12mc+%i642mv+61mn+12wwe~0" % (time.time() + 30, time.time() + 30)
+    
+def get_html(url, wait=False):
     try:
         request = urllib2.Request(url)
         request.add_header("User-Agent", "Mozilla/5.001 (windows; U; NT4.0; en-US; rv:1.0) Gecko/25250101")
-        html = urllib2.urlopen(request).read()
+        # this cookie appears to help prevent ads from appearing on ign game pages.
+        freq = get_freq_cookie()
+        #print "Cookie:", freq
+        request.add_header("Cookie", freq)
+        if wait:
+            request.add_header("Connection", "Keep-Alive")
+            response = urllib2.urlopen(request)
+            time.sleep(0.5)
+            html = response.read()
+        else:
+            html = urllib2.urlopen(request).read()
         return html
     except:
         print "Error accessing:", url
@@ -501,7 +430,7 @@ def test_parse_page():
     infos = {}
     for game in games:
         if game is not None:
-            info = IGN.get_info(game)
+            info = IGN.get_info(game.id)
             if info is not None:
                 info.insert_into_db(DATABASE_FILENAME)
                 infos[game.id] = info
@@ -515,16 +444,35 @@ def test_search(query, get_infos):
             print result
             print ""
             if get_infos:
-                info = IGN.get_game_info(result.link)
+                info = IGN.get_info(result.id)
                 if info is None:
-                    info = IGN.get_game_info(result.link)
+                    info = IGN.get_info(result.id)
                 print info
                 print ""
-                
+
+"""
+Login to my.ign.com. Was going to use this to prevent full page ads, but it turns out
+they still appear even when logged in (tested in browser).
+"""
+def login(email, password):
+    url = "http://my.ign.com/login?al=0"
+    request = urllib2.Request(url)
+    request.add_header("User-Agent", "Mozilla/5.001 (windows; U; NT4.0; en-US; rv:1.0) Gecko/25250101")
+    data = urllib.urlencode({'al': '0', 'email' : email, 'password' : password, 'r' : 'http://my.ign.com'})
+    request.add_data(data)
+    response = urllib2.urlopen(request)
+    jar.extract_cookies(response, request)
+    
 def main():
-    print "__main__"
-    test_search("Call of duty", False)
-    test_parse_page()
+    if len(sys.argv) == 2:
+        results = IGN.search(sys.argv[1])
+    else:
+        return
+    for result in results:
+        pprint(vars(result))
+        print ""
+        pprint(vars(IGN.get_info(result.id)))
+        print ""
 
 
 if __name__ == "__main__":
