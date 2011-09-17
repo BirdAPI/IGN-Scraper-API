@@ -337,7 +337,7 @@ def parse_details2(details2, info):
                     if active_dt2 == 0:
                         info.release_date = detail2.strip() if is_nav_str(detail2) else detail2.text.strip()
                     elif active_dt2 == 1:
-                        info.release_date_text = 'Cancelled'
+                        info.release_date = 'Cancelled'
                     elif active_dt2 == 2:
                         info.also_on = detail2.strip() if is_nav_str(detail2) else detail2.text.strip()
                     elif active_dt2 == 3:
@@ -346,8 +346,7 @@ def parse_details2(details2, info):
                         info.msrp = detail2.strip() if is_nav_str(detail2) else detail2.text.strip()
                     elif active_dt2 == 5:
                         info.esrb_reason = (detail2.strip() if is_nav_str(detail2) else detail2.text.strip())[2:]
-                    active_dt2 = None    
-    #print "details2: \"%s\" | \"%s\" | \"%s\"" % ( info.release_date_text, info.also_on, info.msrp )    
+                    active_dt2 = None
     
 def parse_score_items(score_items, info):
     if score_items is not None and len(score_items) == 2:
@@ -426,13 +425,13 @@ def test_parse_page():
         if game is not None:
             print game
             print ""
-            game.insert_into_db(DATABASE_FILENAME)
+            #game.insert_into_db(DATABASE_FILENAME)
     infos = {}
     for game in games:
         if game is not None:
             info = IGN.get_info(game.id)
             if info is not None:
-                info.insert_into_db(DATABASE_FILENAME)
+                #info.insert_into_db(DATABASE_FILENAME)
                 infos[game.id] = info
                 print info
                 print ""
